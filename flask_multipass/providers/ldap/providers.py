@@ -164,6 +164,11 @@ class LDAPIdentityProvider(LDAPProviderMixin, IdentityProvider):
             convert_app_data(self.settings['mapping'], {}, self.settings['identity_info_keys']).values())
         self._attributes.append(self.ldap_settings['uid'])
         self.id_field = self.settings.setdefault('identifier_field', 'identifier').lower()
+        accepted_users = self.settings.setdefault('accepted_users', 'local').lower()
+        if accepted_users == 'all':
+            self.id_from_auth = True
+        else:
+            self.id_from_auth = False
 
     @property
     def supports_get_identity_groups(self):
@@ -184,7 +189,16 @@ class LDAPIdentityProvider(LDAPProviderMixin, IdentityProvider):
         return search(self.ldap_settings['group_base'], search_filter, attributes=[self.ldap_settings['gid']])
 
     def get_identity_from_auth(self, auth_info):  # pragma: no cover
-        return self._get_identity(auth_info.data.pop(self.id_field))
+        identifier = auth_info.data.get(self.id_field)
+        if not identifier:
+            raise IdentityRetrievalFailed('Identifier missing in auth provider response', provider=self)
+        # Try to get identity attributes from LDAP. If self.id_from_auth=True, and
+        # the user is not found in LDAP, use the auth_info attributes to create the identity:
+        # useful when using a Shibboleth auth provider to authenticate local and non local users.
+        identity = self._get_identity(identifier)
+        if identity is None and self.id_from_auth:
+            identity = IdentityInfo(self, identifier=identifier, **auth_info.data)
+        return identity
 
     def refresh_identity(self, identifier, multipass_data):  # pragma: no cover
         return self._get_identity(identifier)
