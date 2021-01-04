@@ -163,6 +163,7 @@ class LDAPIdentityProvider(LDAPProviderMixin, IdentityProvider):
         self._attributes = list(
             convert_app_data(self.settings['mapping'], {}, self.settings['identity_info_keys']).values())
         self._attributes.append(self.ldap_settings['uid'])
+        self.id_field = self.settings.setdefault('identifier_field', 'identifier').lower()
 
     @property
     def supports_get_identity_groups(self):
@@ -183,7 +184,7 @@ class LDAPIdentityProvider(LDAPProviderMixin, IdentityProvider):
         return search(self.ldap_settings['group_base'], search_filter, attributes=[self.ldap_settings['gid']])
 
     def get_identity_from_auth(self, auth_info):  # pragma: no cover
-        return self._get_identity(auth_info.data.pop('identifier'))
+        return self._get_identity(auth_info.data.pop(self.id_field))
 
     def refresh_identity(self, identifier, multipass_data):  # pragma: no cover
         return self._get_identity(identifier)
